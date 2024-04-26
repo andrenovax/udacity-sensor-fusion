@@ -1,0 +1,5 @@
+results/
+dataset/
+*.pyc
+.DS_Store
+*.pth
