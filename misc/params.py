@@ -38,4 +38,4 @@ sigma_cam_i = 5 # measurement noise standard deviation for image i coordinate
 sigma_cam_j = 5 # measurement noise standard deviation for image j coordinate
 
 # extra
-association_method = 'nn'
+association_method = 'nn'  # change to 'gnn' to enable global nearest neighbour
