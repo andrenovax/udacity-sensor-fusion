@@ -100,8 +100,6 @@ class Trackmanagement:
         # feel free to define your own parameters)
         ############
         
-        tracks_to_delete = []
-
         # decrease score for unassigned tracks
         for i in unassigned_tracks:
             track = self.track_list[i]
@@ -110,15 +108,13 @@ class Trackmanagement:
                 if meas_list[0].sensor.in_fov(track.x):
                     # your code goes here
                     track.score -= 1./params.window
+
+        for track in self.track_list:
             if track.state == 'confirmed':
                 if track.score < params.delete_threshold:
-                    tracks_to_delete.append(track)
-            elif track.P[0, 0] > params.max_P or track.P[1, 1] > params.max_P:
-                tracks_to_delete.append(track)
-
-        # delete old tracks
-        for track in tracks_to_delete:
-            self.delete_track(track)
+                    self.delete_track(track)
+            elif track.P[0,0] > params.max_P or track.P[1,1] > params.max_P:
+                self.delete_track(track)
 
         ############
         # END student code
