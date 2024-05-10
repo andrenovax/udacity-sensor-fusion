@@ -13,6 +13,7 @@
 # imports
 import numpy as np
 from scipy.stats.distributions import chi2
+from scipy.optimize import linear_sum_assignment
 
 # add project directory to python path to enable relative imports
 import os
@@ -37,9 +38,11 @@ class Association:
         # - replace association_matrix with the actual association matrix based on Mahalanobis distance (see below) for all tracks and all measurements
         # - update list of unassigned measurements and unassigned tracks
         ############
+
+        max_value = params.max_P + 1 if params.association_method == 'gnn' else np.inf
         
         # the following only works for at most one track and one measurement
-        self.association_matrix = np.full((len(track_list), len(meas_list)), np.inf)
+        self.association_matrix = np.full((len(track_list), len(meas_list)), max_value)
 
         for track_index, track in enumerate(track_list):
             for meas_index, meas in enumerate(meas_list):
@@ -108,8 +111,13 @@ class Association:
         ############
         # END student code
         ############ 
+    def associate_and_update(self, *args, **kwargs):
+        if params.association_method == 'gnn':
+            return self.associate_and_update_gnn(*args, **kwargs)
+
+        return self.associate_and_update_nn(*args, **kwargs)
     
-    def associate_and_update(self, manager, meas_list, KF):
+    def associate_and_update_nn(self, manager, meas_list, KF):
         # associate measurements and tracks
         self.associate(manager.track_list, meas_list, KF)
     
@@ -142,3 +150,48 @@ class Association:
         
         for track in manager.track_list:            
             print('track', track.id, 'score =', track.score)
+
+    def associate_and_update_gnn(self, manager, meas_list, KF):
+        # Associate measurements with tracks
+        self.associate(manager.track_list, meas_list, KF)
+
+        # Get optimal associations using GNN
+        track_indices, meas_indices = self.GNN()
+
+        # partially used chatgpt to generate this, googling didnt help much
+        # Update associated tracks with measurements
+        for ind_track, ind_meas in zip(track_indices, meas_indices):
+            track = manager.track_list[ind_track]
+            
+            # check visibility, only update tracks in fov    
+            if not meas_list[0].sensor.in_fov(track.x):
+                continue
+            
+            # Kalman update
+            print('update track', track.id, 'with', meas_list[ind_meas].sensor.name, 'measurement', ind_meas)
+            KF.update(track, meas_list[ind_meas])
+            
+            # update score and track state 
+            manager.handle_updated_track(track)
+            
+            # save updated track
+            manager.track_list[ind_track] = track
+
+        # Handle unassigned tracks and measurements
+        self.unassigned_tracks = [i for i, t in enumerate(manager.track_list) if i not in track_indices]
+        self.unassigned_meas = [i for i, m in enumerate(meas_list) if i not in meas_indices]
+        self.association_matrix = np.matrix([])
+
+        # run track management 
+        manager.manage_tracks(self.unassigned_tracks, self.unassigned_meas, meas_list)
+        
+        for track in manager.track_list:            
+            print('track', track.id, 'score =', track.score)
+
+    # used chatgpt to generate this, googling didnt help much
+    def GNN(self):
+        '''Apply Global Nearest Neighbor algorithm to find the best association'''
+        if self.association_matrix.size > 0:
+            row_ind, col_ind = linear_sum_assignment(self.association_matrix)
+            return row_ind, col_ind
+        return [], []
